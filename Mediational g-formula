@@ -1,11 +1,11 @@
 library(mice)
 library(boot)
 load("imputed_data.RData") 
+n_bootstrap <- 200
 
-### anydep
-## Parametric mediation g-formula
+# Scripts for depressive symptoms
 effect_estimates_modified_fn <- function(data, indices) { 
-  set.seed(123 + sum(indices[1])) 
+  
   d_fit_sample <- data[indices, ]
   d_baseline_for_pred <- data 
   n_obs <- nrow(d_baseline_for_pred)
@@ -50,19 +50,16 @@ effect_estimates_modified_fn <- function(data, indices) {
   
   formula_L1_coffeeT1 <- paste("coffeeT1 ~", L1_predictors_formula_part)
   coffeeT1_model <- glm(formula(formula_L1_coffeeT1), data = d_fit_sample, family = binomial)
-
+  
   
   formula_L1_anydepT1 <- paste("anydepT1 ~", L1_predictors_formula_part)
   anydepT1_model <- glm(formula(formula_L1_anydepT1), data = d_fit_sample, family = binomial)
   
   # Mediator models
   current_L1_A0_V_formula_part <- paste("girl + bmiT1 + mothernriT1 + fathernriT1 + friendnriT1 +
-                                        sdqbulliedT1 + punishT1 + piuT1 +
+                                        sdqbulliedT1 + punishT1 + piuT1 +   
                                         Q3gamingtimeT1 + noexerciseMT1 + coffeeT1 +
                                         anydepT1 +", fixed_baseline_confounders_formula_part)
-  
-  formula_M2_wishsub <- paste("wishsubT2 ~", current_L1_A0_V_formula_part) 
-  wishsubT2_model <- glm(formula(formula_M2_wishsub), data = d_fit_sample, family = binomial)
   
   formula_M2_desire <- paste("desirethinT2 ~", current_L1_A0_V_formula_part)
   desirethinT2_model <- glm(formula(formula_M2_desire), data = d_fit_sample, family = binomial)
@@ -74,16 +71,15 @@ effect_estimates_modified_fn <- function(data, indices) {
   outcome_predictors_T3 <- c(
     "girl", fixed_baseline_confounders_formula_part, 
     "bmiT1", "mothernriT1", "fathernriT1", "friendnriT1", "sdqbulliedT1", "punishT1",
-    "piuT1", "Q3gamingtimeT1", "noexerciseMT1", "coffeeT1", "anydepT1",      # L1
-    "wishsubT2", "desirethinT2", "lonelyT2",         # M2
-    "girl:wishsubT2", "girl:desirethinT2", "girl:lonelyT2", # E-M interactions
-    "wishsubT2:desirethinT2", "desirethinT2:lonelyT2", "lonelyT2:wishsubT2"  # M-M interactions
-  )
+    "piuT1", "Q3gamingtimeT1", "noexerciseMT1", "coffeeT1", "anydepT1", 
+    "desirethinT2", "lonelyT2", 
+    "girl:desirethinT2", "girl:lonelyT2",
+    "desirethinT2:lonelyT2")
   outcome_model_formula_string_T3 <- paste(unique(outcome_predictors_T3), collapse = " + ")
   outcome_model_T3 <- glm(formula(paste("anydepT3 ~", outcome_model_formula_string_T3)),
                           data = d_fit_sample, family = binomial)
   
-  # Simulate full history 
+  # Simulation 
   simulate_full_history_fn <- function(baseline_data, A0_val) {
     sim_data <- baseline_data 
     sim_data$girl <- A0_val  
@@ -115,9 +111,6 @@ effect_estimates_modified_fn <- function(data, indices) {
     sim_data$anydepT1 <- rbinom(n_sim, 1, pred_prob_anydepT1)
     
     # Simulated mediator distributions
-    pred_prob_wishsubT2 <- predict(wishsubT2_model, newdata = sim_data, type = "response"); pred_prob_wishsubT2 <- pmax(1e-6, pmin(1 - 1e-6, pred_prob_wishsubT2))
-    sim_data$wishsubT2  <- rbinom(n_sim, 1, pred_prob_wishsubT2)
-    
     pred_prob_desireT2 <- predict(desirethinT2_model, newdata = sim_data, type = "response"); pred_prob_desireT2 <- pmax(1e-6, pmin(1 - 1e-6, pred_prob_desireT2))
     sim_data$desirethinT2 <- rbinom(n_sim, 1, pred_prob_desireT2)
     
@@ -127,41 +120,36 @@ effect_estimates_modified_fn <- function(data, indices) {
     return(sim_data)
   }
   
-  # Simulate data under A=1 and A=0, allowing mediators to respond naturally
+  # Simulate data under A=1 and A=0
   sim_data_A0_1 <- simulate_full_history_fn(d_baseline_for_pred, 1) 
   sim_data_A0_0 <- simulate_full_history_fn(d_baseline_for_pred, 0) 
   
   # Extract mediators for A=0 scenario
-  realized_wish_hist_A0_0 <- sim_data_A0_0[, c("wishsubT2")]
   realized_desire_hist_A0_0 <- sim_data_A0_0[, c("desirethinT2")]
   realized_lonely_hist_A0_0 <- sim_data_A0_0[, c("lonelyT2")]
   
   # Extract mediators for A=1 scenario
-  realized_wish_hist_A0_1 <- sim_data_A0_1[, c("wishsubT2")]
   realized_desire_hist_A0_1 <- sim_data_A0_1[, c("desirethinT2")]
   realized_lonely_hist_A0_1 <- sim_data_A0_1[, c("lonelyT2")]
   
   # Obtain G terms by permuting mediators
-  perm_indices_a0 <- sample(1:n_obs, n_obs, replace = FALSE) 
-  G_wish_hist_A0_0 <- realized_wish_hist_A0_0[perm_indices_a0]
-  G_desire_hist_A0_0 <- realized_desire_hist_A0_0[perm_indices_a0]
-  G_lonely_hist_A0_0 <- realized_lonely_hist_A0_0[perm_indices_a0]
+  perm_indices_a0desire <- sample(1:n_obs, n_obs, replace = FALSE); perm_indices_a0lonely <- sample(1:n_obs, n_obs, replace = FALSE)
+  G_desire_hist_A0_0 <- realized_desire_hist_A0_0[perm_indices_a0desire]
+  G_lonely_hist_A0_0 <- realized_lonely_hist_A0_0[perm_indices_a0lonely]
   
-  perm_indices_a1 <- sample(1:n_obs, n_obs, replace = FALSE)
-  G_wish_hist_A0_1 <- realized_wish_hist_A0_1[perm_indices_a1] 
-  G_desire_hist_A0_1 <- realized_desire_hist_A0_1[perm_indices_a1]
-  G_lonely_hist_A0_1 <- realized_lonely_hist_A0_1[perm_indices_a1]
+  perm_indices_a1desire <- sample(1:n_obs, n_obs, replace = FALSE); perm_indices_a1lonely <- sample(1:n_obs, n_obs, replace = FALSE)
+  G_desire_hist_A0_1 <- realized_desire_hist_A0_1[perm_indices_a1desire]
+  G_lonely_hist_A0_1 <- realized_lonely_hist_A0_1[perm_indices_a1lonely]
   
-  # Calculate Q terms ---
+  # Calculate Q terms
   create_Q_dataset_modified_full <- function(baseline_data, A0_val_for_Q, 
-                                             G_wish_hist_for_Q, G_desire_hist_for_Q, 
+                                             G_desire_hist_for_Q, 
                                              G_lonely_hist_for_Q) { 
     q_data <- baseline_data 
     q_data$girl <- A0_val_for_Q
     n_q_obs <- nrow(q_data)
     
     # Assign G histories
-    q_data$wishsubT2  <- G_wish_hist_for_Q
     q_data$desirethinT2 <- G_desire_hist_for_Q
     q_data$lonelyT2  <- G_lonely_hist_for_Q
     
@@ -195,13 +183,13 @@ effect_estimates_modified_fn <- function(data, indices) {
   
   # Predicted counterfactual values for outcome
   Q_A1_G0_L1 <- mean(predict(outcome_model_T3, newdata = create_Q_dataset_modified_full(d_baseline_for_pred, 1, 
-                                                                                        G_wish_hist_A0_0, G_desire_hist_A0_0, G_lonely_hist_A0_0), type = "response"), na.rm=TRUE)
+                                                                                        G_desire_hist_A0_0, G_lonely_hist_A0_0), type = "response"), na.rm=TRUE)
   
   Q_A0_G0_L0 <- mean(predict(outcome_model_T3, newdata = create_Q_dataset_modified_full(d_baseline_for_pred, 0, 
-                                                                                        G_wish_hist_A0_0, G_desire_hist_A0_0, G_lonely_hist_A0_0), type = "response"), na.rm=TRUE)
+                                                                                        G_desire_hist_A0_0, G_lonely_hist_A0_0), type = "response"), na.rm=TRUE)
   
   Q_A1_G1_L1 <- mean(predict(outcome_model_T3, newdata = create_Q_dataset_modified_full(d_baseline_for_pred, 1, 
-                                                                                        G_wish_hist_A0_1, G_desire_hist_A0_1, G_lonely_hist_A0_1), type = "response"), na.rm=TRUE)
+                                                                                        G_desire_hist_A0_1, G_lonely_hist_A0_1), type = "response"), na.rm=TRUE)
   
   
   # Calculate TE, IDE, TIE, OE, and Difference
@@ -223,16 +211,11 @@ if (!exists("df_miced") || !inherits(df_miced, "mids")) {
   stop("df_miced object not found or not a 'mids' object. Please load your imputed data.")
 }
 required_cols_modified <- c(
-  # A0, V
   "girl", "AA1age", "incomeT1", "AA79Fsep", "cohesionT1","BFIQ",
-  # L1
   "bmiT1", "mothernriT1", "fathernriT1", "friendnriT1",  "punishT1", "sdqbulliedT1", 
   "piuT1", "Q3gamingtimeT1", "noexerciseMT1", "coffeeT1", "anydepT1", 
-  # M2
-  "wishsubT2", "desirethinT2", "lonelyT2", 
-  # Y3
-  "anydepT3"
-) 
+  "desirethinT2", "lonelyT2", 
+  "anydepT3") 
 
 if (!all(required_cols_modified %in% names(df_miced$data))) {
   missing_cols <- required_cols_modified[!required_cols_modified %in% names(df_miced$data)]
@@ -263,17 +246,8 @@ if (!is.na(TE_mean_final) && TE_mean_final != 0 && !is.na(TIE_mean_final) && !is
   PM_final <- (TIE_mean_final + Diff_mean_final) / TE_mean_final # As Diff will be near zero, this is effectively TIE/TE
 }
 
-# Print final results for point estimates
-print(paste("TE (Total Effect of 'girl'):", TE_mean_final))
-print(paste("OE (IDE + TIE):", OE_mean_final)) 
-print(paste("IDE (Direct Effect):", IDE_mean_final))
-print(paste("TIE (Total Indirect Effect via wishsub, desirethin, lonely):", TIE_mean_final))
-print(paste("Difference (TE - OE):", Diff_mean_final)) # This should be numerically close to zero
-print(paste("PM (Proportion Mediated, as defined):", PM_final))
 
-## Bootstrap CIs
-n_bootstrap <- 200
-
+## Bootstrap
 all_imputation_bootstrap_results <- list()
 metric_names <- c("TE", "OE", "IDE", "TIE", "Difference")
 
@@ -292,33 +266,43 @@ for (i in 1:df_miced$m) {
       warning(paste("Error in bootstrap sample (Imputation", i, ", Bootstrap", b, "):", e$message))
       setNames(rep(NA, length(metric_names)), metric_names)
     })
+    
     if (!is.null(res) && is.numeric(res) && all(metric_names %in% names(res))) {
-      bootstrap_results_for_imputation[[b]] <- res[metric_names] # Ensure order and specific metrics
+      bootstrap_results_for_imputation[[b]] <- res[metric_names] 
     } else {
-      # If result is not as expected, fill with NAs
       warning(paste("Unexpected result format for bootstrap sample (Imputation", i, ", Bootstrap", b, ")"))
       bootstrap_results_for_imputation[[b]] <- setNames(rep(NA, length(metric_names)), metric_names)
     }
   }
+  
   all_imputation_bootstrap_results[[i]] <- bootstrap_results_for_imputation
 }
 
-# A single list of vectors
+# A single list of vectors (total = m * n_bootstrap draws)
 pooled_bootstrap_results_list <- unlist(all_imputation_bootstrap_results, recursive = FALSE)
 
 # Combine all bootstrap results into a single data frame
-pooled_bootstrap_results_list <- pooled_bootstrap_results_list[sapply(pooled_bootstrap_results_list, function(x) !is.null(x) && is.numeric(x) && length(x) == length(metric_names))]
+pooled_bootstrap_results_list <- pooled_bootstrap_results_list[
+  sapply(pooled_bootstrap_results_list, function(x) !is.null(x) && is.numeric(x) && length(x) == length(metric_names))
+]
 pooled_bootstrap_results_matrix <- do.call(rbind, pooled_bootstrap_results_list)
 pooled_bootstrap_results_df <- as.data.frame(pooled_bootstrap_results_matrix)
+
+boot_means_4000 <- colMeans(pooled_bootstrap_results_df[, metric_names, drop = FALSE], na.rm = TRUE)
+
+PM_boot_mean_4000 <- NA_real_
+if (!is.na(boot_means_4000["TE"]) && boot_means_4000["TE"] != 0 &&
+    !is.na(boot_means_4000["TIE"]) && !is.na(boot_means_4000["Difference"])) {
+  PM_boot_mean_4000 <- (boot_means_4000["TIE"] + boot_means_4000["Difference"]) / boot_means_4000["TE"]
+}
 
 # Percentile boot CIs
 alpha <- 0.05
 lower_quantile <- alpha / 2
 upper_quantile <- 1 - (alpha / 2)
 calculate_percentile_ci <- function(estimates) {
-  # Remove NA values before calculating quantiles
   estimates <- estimates[!is.na(estimates)]
-  if (length(estimates) < 2) { # Need at least 2 non-NA values for quantiles
+  if (length(estimates) < 2) { 
     return(c(lower = NA, upper = NA))
   }
   quantile(estimates, probs = c(lower_quantile, upper_quantile), na.rm = TRUE)
@@ -329,23 +313,27 @@ ci_OE <- calculate_percentile_ci(pooled_bootstrap_results_df[, "OE"])
 ci_IDE <- calculate_percentile_ci(pooled_bootstrap_results_df[, "IDE"])
 ci_TIE <- calculate_percentile_ci(pooled_bootstrap_results_df[, "TIE"])
 ci_Difference <- calculate_percentile_ci(pooled_bootstrap_results_df[, "Difference"])
-pooled_bootstrap_results_df$PM <- NA_real_ # Initialize with NA_real_ for numeric type
+
+pooled_bootstrap_results_df$PM <- NA_real_ 
 valid_te_pm <- pooled_bootstrap_results_df$TE != 0 & !is.na(pooled_bootstrap_results_df$TE)
 valid_tie_pm <- !is.na(pooled_bootstrap_results_df$TIE)
 valid_diff_pm <- !is.na(pooled_bootstrap_results_df$Difference)
 valid_pm_rows <- valid_te_pm & valid_tie_pm & valid_diff_pm
-pooled_bootstrap_results_df$PM[valid_pm_rows] <- (pooled_bootstrap_results_df$TIE[valid_pm_rows] + pooled_bootstrap_results_df$Difference[valid_pm_rows]) / pooled_bootstrap_results_df$TE[valid_pm_rows]
+pooled_bootstrap_results_df$PM[valid_pm_rows] <-
+  (pooled_bootstrap_results_df$TIE[valid_pm_rows] + pooled_bootstrap_results_df$Difference[valid_pm_rows]) /
+  pooled_bootstrap_results_df$TE[valid_pm_rows]
 ci_PM <- calculate_percentile_ci(pooled_bootstrap_results_df[, "PM"])
 
+# Print bootstrap means and CIs (ALL m*n_bootstrap estimates)
+print(paste("Bootstrap mean (ALL", df_miced$m * n_bootstrap, "estimates) TE:", round(boot_means_4000["TE"], 4)))
+print(paste("Bootstrap mean (ALL", df_miced$m * n_bootstrap, "estimates) OE:", round(boot_means_4000["OE"], 4)))
+print(paste("Bootstrap mean (ALL", df_miced$m * n_bootstrap, "estimates) IDE:", round(boot_means_4000["IDE"], 4)))
+print(paste("Bootstrap mean (ALL", df_miced$m * n_bootstrap, "estimates) TIE:", round(boot_means_4000["TIE"], 4)))
+print(paste("Bootstrap mean (ALL", df_miced$m * n_bootstrap, "estimates) Difference:", round(boot_means_4000["Difference"], 4)))
+print(paste("Bootstrap mean (ALL", df_miced$m * n_bootstrap, "estimates) PM ((mean TIE + mean Difference)/mean TE):", round(PM_boot_mean_4000, 4)))
 
-# Print final results for CIs
-print(paste("TE (Total Effect of 'girl'):", round(TE_mean_final, 4),
-            " (95% CI: ", round(ci_TE[1], 4), ", ", round(ci_TE[2], 4), ")", sep = ""))
-print(paste("OE (IDE + TIE):", round(OE_mean_final, 4), # Updated label for OE
-            " (95% CI: ", round(ci_OE[1], 4), ", ", round(ci_OE[2], 4), ")", sep = ""))
-print(paste("IDE (Direct Effect):", round(IDE_mean_final, 4),
-            " (95% CI: ", round(ci_IDE[1], 4), ", ", round(ci_IDE[2], 4), ")", sep = ""))
-print(paste("TIE (Total Indirect Effect via wishsub, desirethin, lonely):", round(TIE_mean_final, 4), # Updated label for TIE
-            " (95% CI: ", round(ci_TIE[1], 4), ", ", round(ci_TIE[2], 4), ")", sep = ""))
-print(paste("Difference (TE - OE):", round(Diff_mean_final, 4),
-            " (95% CI: ", round(ci_Difference[1], 4), ", ", round(ci_Difference[2], 4), ")", sep = ""))
+print(paste0("TE  (95% CI: ", round(ci_TE[1], 4), ", ", round(ci_TE[2], 4), ")"))
+print(paste0("OE  (95% CI: ", round(ci_OE[1], 4), ", ", round(ci_OE[2], 4), ")"))
+print(paste0("IDE (95% CI: ", round(ci_IDE[1], 4), ", ", round(ci_IDE[2], 4), ")"))
+print(paste0("TIE (95% CI: ", round(ci_TIE[1], 4), ", ", round(ci_TIE[2], 4), ")"))
+print(paste0("Difference (95% CI: ", round(ci_Difference[1], 4), ", ", round(ci_Difference[2], 4), ")"))
