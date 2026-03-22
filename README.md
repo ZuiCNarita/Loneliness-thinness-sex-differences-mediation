@@ -1,5 +1,5 @@
 Mediational g-formula Analysis Code
-This repository contains the R code used to estimate interventional direct and indirect effects in the study: Narita et al., “Mediators of girls’ higher prevalence of internalizing problems: the role of loneliness, thin-ideal internalization, and gender-related stressors.” The code implements the parametric mediational g-formula and reproduces all quantitative results reported in the manuscript.
+This repository contains the R code used to estimate interventional direct and indirect effects in the study: Narita et al., “Loneliness and desire for thinness explain sex differences in adolescent internalizing problems.” The code implements the parametric mediational g-formula and reproduces all quantitative results reported in the manuscript.
 
 File organization
 This package is organized as follows:
