@@ -16,7 +16,7 @@ data_imputed <- data.frame(
   girl         = rbinom(n, 1, 0.5),                       
   AA1age       = rnorm(n, mean = 12.2, sd = 0.3),
   incomeT1     = sample(1:3, n, replace = TRUE),           
-  AA79Fsep     = rbinom(n, 1, 0.1),
+  BA108FSep     = rbinom(n, 1, 0.1),
   cohesionT1   = rnorm(n, mean = 13, sd = 3),
   BFIQ         = rnorm(n, mean = 110, sd = 15),
   
@@ -26,6 +26,8 @@ data_imputed <- data.frame(
   fathernriT1      = rnorm(n, mean = 0, sd = 1),
   friendnriT1      = rnorm(n, mean = 0, sd = 1),
   punishT1         = rbinom(n, 1, 0.3),
+  biaskajiT1       = rbinom(n, 1, 0.2),
+  tannerdevelop2T1 = rbinom(n, 1, 0.2),
   sdqbulliedT1     = rbinom(n, 1, 0.2),
   piuT1            = rnorm(n, mean = 4, sd = 2),
   Q3gamingtimeT1   = rbinom(n, 1, 0.4),
