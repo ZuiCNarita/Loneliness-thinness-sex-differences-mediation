@@ -36,7 +36,6 @@ data_imputed <- data.frame(
   anydepT1         = rbinom(n, 1, 0.2),
   
   # Mediators
-  wishsubT2        = rbinom(n, 1, 0.3),
   desirethinT2     = rbinom(n, 1, 0.4),
   lonelyT2         = rbinom(n, 1, 0.3),
   
